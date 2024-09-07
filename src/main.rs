@@ -1,4 +1,12 @@
+pub mod cli;
+pub mod cmake;
+pub mod utils;
+
+use crate::utils::debug_cmd;
+use crate::cli::{Commands, ExeArgs};
+
 use clap::Parser;
+
 use log::*;
 
 use std::{
@@ -32,7 +40,7 @@ impl<'a> BuildPath<'a> {
     /// - compiler version (if not the default is in use) - source: CC and CXX
     /// - sanitizers (if used)
     ///
-    fn to_path(self) -> PathBuf {
+    fn to_path(&self) -> PathBuf {
         let compiler = Path::new(&self.compiler_path).file_name().unwrap();
 
         let dir = format!(
@@ -51,40 +59,54 @@ impl<'a> BuildPath<'a> {
     }
 }
 
+impl std::fmt::Display for BuildPath<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!("{}", self.to_path().display()))
+    }
+}
+
 fn create_compile_cmd_symlink(src: &PathBuf, dst: &PathBuf) -> Result<(), io::Error> {
     let file = "compile_commands.json";
-    fs::symlink(src.join(file), dst.join(file))
+    if std::fs::exists(dst.join(file)).is_err() {
+        return fs::symlink(src.join(file), dst.join(file));
+    }
+    Ok(())
 }
 
-fn build(path: &PathBuf, build_type: &String) -> Result<ExitStatus, io::Error> {
-    let mut cmd = Command::new("ech")
-        .arg(format!("Path: {:?}, build: {}", path, build_type))
-        // .stdout(Stdio::piped())
-        .spawn()
-        .expect("Failed to spawn process!");
+fn build(args: &cli::Args, build_dir: &PathBuf) -> Result<(), Box<dyn Error>> {
+    cmake::configure(&build_dir, &args)?;
+    cmake::build(&build_dir, &args)?;
+    create_compile_cmd_symlink(&build_dir, &args.project.clone().into())?;
 
-    Ok(cmd.wait()?)
-    // let result = cmd.wait_with_output().unwrap();
-    // info!("{}", String::from_utf8(result.stdout.as_slice().to_vec()).unwrap());
+    Ok(())
 }
 
-#[derive(Parser)]
-struct Args {
-    /// Project path to build
-    #[arg(short, long)]
-    project: String,
+fn run(target: &String, build_dir: &PathBuf, args: &ExeArgs) -> Result<ExitStatus, Box<dyn Error>> {
+    if target == "all" {
+        return Err("Target must be specified".into());
+    }
 
-    /// Build type
-    #[arg(short, long, default_value_t = String::from("Debug"))]
-    build_type: String,
+    let exes = utils::find_files(build_dir, |filename| { filename == *target });
+    match exes.len() {
+        1 => {
+            let mut cmd = Command::new(&exes[0]);
+            cmd.args(&args.args);
+            let mut process = cmd.spawn().expect("Failed to run the built executable!");
+            debug_cmd(&cmd);
+
+            Ok(process.wait()?)
+        },
+        0 => Err(format!("No executable found in `{}`", build_dir.display()).into()),
+        _ => Err(format!("Multiple executables found in `{}`", build_dir.display()).into()),
+    }
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
     env_logger::builder()
-        .format_timestamp_nanos()
+        .format_timestamp_millis()
         .init();
 
-    let args = Args::parse();
+    let args = cli::Args::parse();
     let compiler = (env::var("CC")?, env::var("CXX")?);
 
     let build_dir = BuildPath{
@@ -94,12 +116,23 @@ fn main() -> Result<(), Box<dyn Error>> {
         sanitizer: None
     }.to_path();
 
-    std::fs::create_dir(&build_dir)?;
-    info!("Build directory created at: {}", build_dir.to_string_lossy());
+    match std::fs::exists(&build_dir) {
+        Ok(_) => info!("Build directory already exists at: {}", build_dir.to_string_lossy()),
+        Err(_) => {
+            std::fs::create_dir_all(&build_dir)?;
+            info!("Build directory created at: {}", build_dir.to_string_lossy());
+        }
+    }
 
-    create_compile_cmd_symlink(&build_dir, &args.project.into())?;
-
-    build(&build_dir, &args.build_type)?;
+    match &args.command {
+        Commands::Build{} => {
+            build(&args, &build_dir)?;
+        }
+        Commands::Run(exe_args) => {
+            build(&args, &build_dir)?;
+            run(&args.target, &build_dir, exe_args)?;
+        }
+    }
 
     Ok(())
 }
