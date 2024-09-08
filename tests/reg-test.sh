@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 
-expected=$(echo -e "Arguments: ./tests/cpp/build/debug-g++/test arg1 arg2 arg3 \nDefines: v1 v2 ")
+set -euo pipefail
+
+expected=$(echo -e "Arguments: arg1 arg2 arg3 \nDefines: v1 v2 ")
 
 result=$(
     cargo run -- \

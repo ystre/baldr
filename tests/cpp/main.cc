@@ -7,7 +7,7 @@
 int main(int argc, char* args[]) {
     std::cout << "Arguments: ";
 
-    for (int i = 0; i < argc; ++i) {
+    for (int i = 1; i < argc; ++i) {
         std::cout << args[i] << ' ';
     }
 
