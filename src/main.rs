@@ -40,13 +40,12 @@ impl<'a> BuildPath<'a> {
     /// - sanitizers (if used)
     ///
     fn to_path(&self) -> PathBuf {
-        // let compiler = Path::new(&self.compiler_path).file_name().unwrap();
+        let compiler = Path::new(&self.compiler_path).file_name().unwrap();
 
         let dir = format!(
             "{}-{}{}",
             self.build_type.to_lowercase(),
-            "",
-            // compiler.to_str().unwrap(),
+            compiler.to_str().unwrap(),
             match self.sanitizer {
                 Some(san) => format!("-{}", san),
                 None => "".into()
@@ -112,7 +111,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         project: args.project.as_str(),
         build_type: args.build_type.as_str(),
         // compiler_path: compiler.1.as_str(),
-        compiler_path: "",      // TODO(feat): configurable compilers
+        compiler_path: "na",      // TODO(feat): configurable compilers
         sanitizer: None
     }.to_path();
 
