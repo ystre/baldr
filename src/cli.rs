@@ -38,7 +38,7 @@ pub struct Args {
     pub jobs: u8,
 
     /// Arguments to forward to CMake
-    #[arg(short = 'D', long)]
+    #[arg(short = 'D', long = "cmake-define")]
     pub cmake_args: Vec<String>,
 
     #[command(subcommand)]

@@ -8,8 +8,8 @@ result=$(
     cargo run -- \
         --project ./tests/cpp \
         --target test \
-        -D DEFINE1=v1 \
-        -D DEFINE2=v2 \
+        -DDEFINE1=v1 \
+        --cmake-define DEFINE2=v2 \
         run \
         -- \
         arg1 arg2 arg3
