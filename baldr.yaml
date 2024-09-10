@@ -1,0 +1,3 @@
+__cwd:
+source: "cwd"
+debugger: gdb

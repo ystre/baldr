@@ -1,4 +1,5 @@
 pub mod cli;
+pub mod cfg;
 pub mod cmake;
 pub mod utils;
 
@@ -6,6 +7,7 @@ use crate::utils::debug_cmd;
 use crate::cli::{Commands, ExeArgs};
 
 use clap::Parser;
+use config::Config;
 
 use log::*;
 
@@ -72,15 +74,15 @@ fn create_compile_cmd_symlink(src: &PathBuf, dst: &PathBuf) -> Result<(), io::Er
     Ok(())
 }
 
-fn build(args: &cli::Args, build_dir: &PathBuf) -> Result<(), Box<dyn Error>> {
-    cmake::configure(&build_dir, &args)?;
-    cmake::build(&build_dir, &args)?;
-    create_compile_cmd_symlink(&build_dir, &args.project.clone().into())?;
+fn build(args: &cli::Args, config: &Config, build_dir: &PathBuf) -> Result<(), Box<dyn Error>> {
+    cmake::configure(build_dir, args, config)?;
+    cmake::build(build_dir, args, config)?;
+    create_compile_cmd_symlink(build_dir, &args.project.clone().into())?;
 
     Ok(())
 }
 
-fn run(target: &String, build_dir: &PathBuf, args: &ExeArgs) -> Result<ExitStatus, Box<dyn Error>> {
+fn run(target: &String, build_dir: &PathBuf, config: &Config, args: &ExeArgs) -> Result<ExitStatus, Box<dyn Error>> {
     if target == "all" {
         return Err("Target must be specified".into());
     }
@@ -88,12 +90,25 @@ fn run(target: &String, build_dir: &PathBuf, args: &ExeArgs) -> Result<ExitStatu
     let exes = utils::find_files(build_dir, |filename| { filename == *target });
     match exes.len() {
         1 => {
-            let mut cmd = Command::new(&exes[0]);
-            cmd.args(&args.args);
-            let mut process = cmd.spawn().expect("Failed to run the built executable!");
-            debug_cmd(&cmd);
+            let mut cmd = (|| {
+                if args.debug {
+                    let debugger = config.get::<String>("debugger")
+                        .expect("No debugger is configured");                                       // TODO(err): proper and consistent error handling
 
+                    let mut cmd = Command::new(debugger);
+                    cmd.arg("--args");
+                    cmd.arg(&exes[0]);
+                    cmd
+                } else {
+                    Command::new(&exes[0])
+                }
+            })();
+
+            cmd.args(&args.args);
+            let mut process = cmd.spawn().expect("Failed to run the built executable");             // TODO(err): proper and consistent error handling
+            debug_cmd(&cmd);
             Ok(process.wait()?)
+
         },
         0 => Err(format!("No executable found in `{}`", build_dir.display()).into()),
         _ => Err(format!("Multiple executables found in `{}`", build_dir.display()).into()),
@@ -106,6 +121,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         .init();
 
     let args = cli::Args::parse();
+    let config = cfg::read_config(&args.config).unwrap();
 
     let build_dir = BuildPath{
         project: args.project.as_str(),
@@ -118,18 +134,18 @@ fn main() -> Result<(), Box<dyn Error>> {
     match std::fs::exists(&build_dir) {
         Ok(_) => info!("Build directory already exists at: {}", build_dir.to_string_lossy()),
         Err(_) => {
-            std::fs::create_dir_all(&build_dir)?;
+            std::fs::create_dir_all(&build_dir).expect("Failed to create directory");
             info!("Build directory created at: {}", build_dir.to_string_lossy());
         }
     }
 
     match &args.command {
         Commands::Build{} => {
-            build(&args, &build_dir)?;
+            build(&args, &config, &build_dir).expect("Build failed");
         }
         Commands::Run(exe_args) => {
-            build(&args, &build_dir)?;
-            run(&args.target, &build_dir, exe_args)?;
+            build(&args, &config, &build_dir).expect("Build failed");
+            run(&args.target, &build_dir, &config, exe_args).expect("Failed to run executable");
         }
     }
 
