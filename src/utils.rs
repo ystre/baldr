@@ -1,4 +1,3 @@
-use log::*;
 use walkdir::WalkDir;
 
 use std::path::PathBuf;
@@ -33,9 +32,9 @@ where
     found_files
 }
 
-pub fn debug_cmd(cmd: &Command) {
-    debug!(
-        "CMD: {} {}",
+pub fn format_cmd(cmd: &Command) -> String {
+    format!(
+        "{} {}",
         cmd.get_program().to_string_lossy(),
         cmd.get_args().map(|x| x.to_string_lossy()).collect::<Vec<_>>().join(" ")
     )

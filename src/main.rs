@@ -3,7 +3,7 @@ pub mod cfg;
 pub mod cmake;
 pub mod utils;
 
-use crate::utils::debug_cmd;
+use crate::utils::format_cmd;
 use crate::cli::{Commands, ExeArgs};
 
 use clap::Parser;
@@ -12,7 +12,6 @@ use config::Config;
 use log::*;
 
 use std::{
-    error::Error,
     io,
     os::unix::fs,
     path::{
@@ -74,15 +73,16 @@ fn create_compile_cmd_symlink(src: &PathBuf, dst: &PathBuf) -> Result<(), io::Er
     Ok(())
 }
 
-fn build(args: &cli::Args, config: &Config, build_dir: &PathBuf) -> Result<(), Box<dyn Error>> {
+fn build(args: &cli::Args, config: &Config, build_dir: &PathBuf) -> Result<(), String> {
     cmake::configure(build_dir, args, config)?;
-    cmake::build(build_dir, args, config)?;
-    create_compile_cmd_symlink(build_dir, &args.project.clone().into())?;
+    cmake::build(build_dir, args)?;
+    create_compile_cmd_symlink(build_dir, &args.project.clone().into())
+        .map_err(|e| format!("Failed to create a symlink for `compile_commands.json`: {e}"))?;
 
     Ok(())
 }
 
-fn run(target: &String, build_dir: &PathBuf, config: &Config, args: &ExeArgs) -> Result<ExitStatus, Box<dyn Error>> {
+fn run(target: &String, build_dir: &PathBuf, config: &Config, args: &ExeArgs) -> Result<ExitStatus, String> {
     if target == "all" {
         return Err("Target must be specified".into());
     }
@@ -90,24 +90,24 @@ fn run(target: &String, build_dir: &PathBuf, config: &Config, args: &ExeArgs) ->
     let exes = utils::find_files(build_dir, |filename| { filename == *target });
     match exes.len() {
         1 => {
-            let mut cmd = (|| {
+            let mut cmd = (|| -> Result<Command, String> {
                 if args.debug {
                     let debugger = config.get::<String>("debugger")
-                        .expect("No debugger is configured");                                       // TODO(err): proper and consistent error handling
+                        .map_err(|e| format!("No debugger is configured: {e}"))?;
 
                     let mut cmd = Command::new(debugger);
                     cmd.arg("--args");
                     cmd.arg(&exes[0]);
-                    cmd
+                    Ok(cmd)
                 } else {
-                    Command::new(&exes[0])
+                    Ok(Command::new(&exes[0]))
                 }
-            })();
+            })()?;
 
             cmd.args(&args.args);
-            let mut process = cmd.spawn().expect("Failed to run the built executable");             // TODO(err): proper and consistent error handling
-            debug_cmd(&cmd);
-            Ok(process.wait()?)
+            let mut process = cmd.spawn().map_err(|e| format!("Failed to run the built executable: {e}"))?;
+            let cmd_str = format_cmd(&cmd);
+            Ok(process.wait().map_err(|e| format!("Command `{cmd_str}` did not start; {e}"))?)
 
         },
         0 => Err(format!("No executable found in `{}`", build_dir.display()).into()),
@@ -115,19 +115,18 @@ fn run(target: &String, build_dir: &PathBuf, config: &Config, args: &ExeArgs) ->
     }
 }
 
-fn main() -> Result<(), Box<dyn Error>> {
+fn main() -> Result<(), String> {
     env_logger::builder()
         .format_timestamp_millis()
         .init();
 
     let args = cli::Args::parse();
-    let config = cfg::read_config(&args.config).unwrap();
+    let config = cfg::read_config(&args.config).map_err(|e| e.to_string())?;
 
     let build_dir = BuildPath{
         project: args.project.as_str(),
         build_type: args.build_type.as_str(),
-        // compiler_path: compiler.1.as_str(),
-        compiler_path: "na",      // TODO(feat): configurable compilers
+        compiler_path: &config.get_string("compiler").map_err(|e| e.to_string())?,
         sanitizer: None
     }.to_path();
 
@@ -141,10 +140,10 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     match &args.command {
         Commands::Build{} => {
-            build(&args, &config, &build_dir).expect("Build failed");
+            build(&args, &config, &build_dir)?;
         }
         Commands::Run(exe_args) => {
-            build(&args, &config, &build_dir).expect("Build failed");
+            build(&args, &config, &build_dir)?;
             run(&args.target, &build_dir, &config, exe_args).expect("Failed to run executable");
         }
     }

@@ -1,14 +1,13 @@
-use crate::utils::debug_cmd;
+use crate::utils::format_cmd;
 use crate::cli;
 
 use config::Config;
+use log::*;
 
-use std::io;
 use std::process::{ExitStatus, Command};
 use std::path::PathBuf;
 
-pub fn configure(path: &PathBuf, args: &cli::Args, config: &Config) -> Result<ExitStatus, io::Error> {
-    // TODO(feat): configure optional CLI arguments from config file
+pub fn configure(path: &PathBuf, args: &cli::Args, config: &Config) -> Result<ExitStatus, String> {
     let mut cmd = Command::new("cmake");
     cmd.args([
         "-S", args.project.as_str(),
@@ -21,14 +20,24 @@ pub fn configure(path: &PathBuf, args: &cli::Args, config: &Config) -> Result<Ex
         cmd.arg(format!("-D{}", arg));
     }
 
-    let mut process = cmd.spawn().expect("Failed to spawn CMake configuring");
-    debug_cmd(&cmd);
+    for arg in &config.get_array("cmake.definitions").unwrap_or([].to_vec()) {
+        cmd.arg(
+            format!(
+                "-D{}",
+                arg.clone()
+                    .into_string()
+                    .map_err(|e| format!("CMake definition cannot be converted to string: {e}"))?
+            )
+        );
+    }
 
-    Ok(process.wait()?)
+    let cmd_str = format_cmd(&cmd);
+    debug!("{}", cmd_str);
+    let mut process = cmd.spawn().map_err(|e| format!("Spawning command `{cmd_str}` failed with `{e}`"))?;
+    Ok(process.wait().map_err(|e| format!("Command `{cmd_str}` did not start; {e}"))?)
 }
 
-pub fn build(path: &PathBuf, args: &cli::Args, config: &Config) -> Result<ExitStatus, io::Error> {
-    // TODO(feat): configure optional CLI arguments from config file
+pub fn build(path: &PathBuf, args: &cli::Args) -> Result<ExitStatus, String> {
     let mut cmd = Command::new("cmake");
     cmd.args([
         "--build", &path.to_string_lossy(),
@@ -37,8 +46,8 @@ pub fn build(path: &PathBuf, args: &cli::Args, config: &Config) -> Result<ExitSt
         "-j", args.jobs.to_string().as_str()
     ]);
 
-    let mut process = cmd.spawn().expect("Failed to spawn CMake build");
-    debug_cmd(&cmd);
-
-    Ok(process.wait()?)
+    let cmd_str = format_cmd(&cmd);
+    debug!("{}", cmd_str);
+    let mut process = cmd.spawn().map_err(|e| format!("Spawning command `{cmd_str}` failed with `{e}`"))?;
+    Ok(process.wait().map_err(|e| format!("Command `{cmd_str}` did not start; {e}"))?)
 }

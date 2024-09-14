@@ -1,3 +1,17 @@
+# A marker indicating the source.
 __cwd:
+
+# Demonstrating the priority of the sources.
+# Keys will be overwritten during the merging of configuration files.
 source: "cwd"
+
+# Example configuration starts here
 debugger: gdb
+compiler: gcc
+cmake:
+
+  # These will be given to CMake configuring.
+  # Must be a list of strings.
+  definitions:
+    - CFG1=cfg1
+    - CFG2=cfg2
