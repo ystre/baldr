@@ -1,4 +1,3 @@
-use log::*;
 use walkdir::WalkDir;
 
 use std::path::PathBuf;
