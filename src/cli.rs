@@ -60,6 +60,18 @@ pub struct Args {
     #[arg(short, long, default_value_t = String::from("all"))]
     pub target: String,
 
+    /// Clean build
+    #[arg(short, long, default_value_t = false)]
+    pub delete: bool,
+
+    /// Skip confirmations (can be handy for scripting)
+    #[arg(long, default_value_t = false)]
+    pub no_confirm: bool,
+
+    /// Skip CMake configure (only applicable if it is already configured)
+    #[arg(long, default_value_t = false)]
+    pub no_configure: bool,
+
     /// Number of parallel build jobs
     #[arg(short, long, default_value_t = 1)]
     pub jobs: u8,

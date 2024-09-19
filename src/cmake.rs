@@ -1,3 +1,4 @@
+use crate::cfg::get_cmake_definitions;
 use crate::utils::format_cmd;
 use crate::cli;
 
@@ -9,6 +10,14 @@ use std::path::PathBuf;
 
 pub fn configure(path: &PathBuf, args: &cli::Args, config: &Config) -> Result<ExitStatus, String> {
     let mut cmd = Command::new("cmake");
+
+    let cc: String = config.get("compiler.cc").unwrap_or_default();
+    let cxx: String = config.get("compiler.cxx").unwrap_or_default();
+    if cc != "" && cxx != "" {
+        cmd.env("CC", cc);
+        cmd.env("CXX", cxx);
+    }
+
     cmd.args([
         "-S", args.project.as_str(),
         "-B", &path.to_string_lossy(),
@@ -20,15 +29,8 @@ pub fn configure(path: &PathBuf, args: &cli::Args, config: &Config) -> Result<Ex
         cmd.arg(format!("-D{}", arg));
     }
 
-    for arg in &config.get_array("cmake.definitions").unwrap_or([].to_vec()) {
-        cmd.arg(
-            format!(
-                "-D{}",
-                arg.clone()
-                    .into_string()
-                    .map_err(|e| format!("CMake definition cannot be converted to string: {e}"))?
-            )
-        );
+    for arg in get_cmake_definitions(&config) {
+        cmd.arg(format!("-D{arg}"));
     }
 
     let cmd_str = format_cmd(&cmd);

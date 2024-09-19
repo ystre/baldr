@@ -1,8 +1,11 @@
 debugger: gdb
-compiler: gcc
+compiler:
+  cc: gcc
+  cxx: g++
+
+# These will be given to CMake configuring.
 cmake:
-  # These will be given to CMake configuring.
-  # Must be a list of strings.
   definitions:
     - CFG1=cfg1
     - CFG2=cfg2
+    - invalid: which is silently dropped during parsing, and is tested

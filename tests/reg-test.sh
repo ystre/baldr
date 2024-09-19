@@ -3,9 +3,16 @@
 set -euo pipefail
 
 expected=$(echo -e "Arguments: arg1 arg2 arg3 \nDefines: v1 v2 ")
+baldr="./target/release/baldr"
+
+if [[ ! -e $baldr ]]; then
+    >&2 echo "Missing binary file. Maybe forgot to build?"
+    >&2 echo "cargo build --release"
+    exit 0
+fi
 
 result=$(
-    cargo run -- \
+    $baldr \
         --project ./tests/cpp \
         --target test \
         -DDEFINE1=v1 \

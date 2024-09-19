@@ -12,7 +12,11 @@ use config::Config;
 use log::*;
 
 use std::{
-    io,
+    io::{
+        self,
+        BufRead,
+        Write
+    },
     os::unix::fs,
     path::{
         Path,
@@ -41,12 +45,15 @@ impl<'a> BuildPath<'a> {
     /// - sanitizers (if used)
     ///
     fn to_path(&self) -> PathBuf {
-        let compiler = Path::new(&self.compiler_path).file_name().unwrap();
+        let compiler = match self.compiler_path {
+            "" => "".into(),
+            _  => format!("-{}", Path::new(&self.compiler_path).file_name().unwrap().to_string_lossy().to_string()),
+        };
 
         let dir = format!(
-            "{}-{}{}",
+            "{}{}{}",
             self.build_type.to_lowercase(),
-            compiler.to_str().unwrap(),
+            compiler,
             match self.sanitizer {
                 Some(san) => format!("-{}", san),
                 None => "".into()
@@ -73,8 +80,34 @@ fn create_compile_cmd_symlink(src: &PathBuf, dst: &PathBuf) -> Result<(), io::Er
     Ok(())
 }
 
-fn build(args: &cli::Args, config: &Config, build_dir: &PathBuf) -> Result<(), String> {
-    cmake::configure(build_dir, args, config)?;
+fn delete_build_dir(build_dir: &PathBuf, confirm: bool) -> Result<bool, String> {
+    if confirm {
+        eprint!("Are you sure to remove `{}` (press 'y' to proceed): ", build_dir.to_string_lossy());
+        io::stdout().lock().flush().unwrap();
+        let answer = io::stdin().lock().lines().next().unwrap().unwrap();
+
+        if answer != "y" {
+            info!("Skipping clean build.");
+            return Ok(false);
+        }
+
+    }
+    else {
+        info!("Non-interactive mode, skipping confirmation for deleting build directory.");
+    }
+
+    std::fs::remove_dir_all(&build_dir).map_err(|e| format!("Failed to delete build directory: {e}"))?;
+    info!("Build directory deleted!");
+    Ok(true)
+}
+
+fn build(args: &cli::Args, config: &Config, build_dir: &PathBuf, build_exists: bool) -> Result<(), String> {
+    if !build_exists {
+        cmake::configure(build_dir, args, config)?;
+    } else if !args.no_configure {
+        cmake::configure(build_dir, args, config)?;
+    }
+
     cmake::build(build_dir, args)?;
     create_compile_cmd_symlink(build_dir, &args.project.clone().into())
         .map_err(|e| format!("Failed to create a symlink for `compile_commands.json`: {e}"))?;
@@ -126,25 +159,41 @@ fn main() -> Result<(), String> {
     let build_dir = BuildPath{
         project: args.project.as_str(),
         build_type: args.build_type.as_str(),
-        compiler_path: &config.get_string("compiler").map_err(|e| e.to_string())?,
+        compiler_path: &config.get_string("compiler.cxx").unwrap_or_default(),
         sanitizer: None
     }.to_path();
 
-    match std::fs::exists(&build_dir) {
-        Ok(_) => info!("Build directory already exists at: {}", build_dir.to_string_lossy()),
-        Err(_) => {
-            std::fs::create_dir_all(&build_dir).expect("Failed to create directory");
-            info!("Build directory created at: {}", build_dir.to_string_lossy());
+    info!("Using build directory: {}", build_dir.to_string_lossy());
+
+    let mut build_exists = match std::fs::exists(&build_dir) {
+        Ok(true) => {
+            info!("Build directory already exists.");
+            Ok(true)
+        },
+        Ok(false) => Ok(false),
+        Err(x) => Err(format!("{}", x)),
+    }?;
+
+    if args.delete {
+        if build_exists {
+            build_exists = !delete_build_dir(&build_dir, !args.no_confirm)?;
+        } else {
+            warn!("Build directory does not exist, there is nothing to delete!");
+        }
+
+        if !build_exists {
+            std::fs::create_dir_all(&build_dir).map_err(|e| format!("Failed to create build directory: {e}"))?;
+            info!("Build directory has been created.");
         }
     }
 
     match &args.command {
         Commands::Build{} => {
-            build(&args, &config, &build_dir)?;
+            build(&args, &config, &build_dir, build_exists)?;
         }
         Commands::Run(exe_args) => {
-            build(&args, &config, &build_dir)?;
-            run(&args.target, &build_dir, &config, exe_args).expect("Failed to run executable");
+            build(&args, &config, &build_dir, build_exists)?;
+            run(&args.target, &build_dir, &config, exe_args).map_err(|e| format!("Failed to run executable: {e}"))?;
         }
     }
 
@@ -156,7 +205,33 @@ mod tests {
     use super::*;
 
     #[test]
-    fn build_dir() {
+    fn build_dir_default() {
+        assert_eq!(
+            BuildPath{
+                project: "project".into(),
+                build_type: "Debug".into(),
+                compiler_path: "".into(),
+                sanitizer: None
+            }.to_path().to_string_lossy(),
+            "project/build/debug"
+        );
+    }
+
+    #[test]
+    fn build_dir_sanitizer() {
+        assert_eq!(
+            BuildPath{
+                project: "project".into(),
+                build_type: "Debug".into(),
+                compiler_path: "".into(),
+                sanitizer: Some("asan")
+            }.to_path().to_string_lossy(),
+            "project/build/debug-asan"
+        );
+    }
+
+    #[test]
+    fn build_dir_compiler() {
         assert_eq!(
             BuildPath{
                 project: "project".into(),
@@ -166,13 +241,16 @@ mod tests {
             }.to_path().to_string_lossy(),
             "project/build/debug-gcc"
         );
+    }
 
+    #[test]
+    fn build_dir_both() {
         assert_eq!(
             BuildPath{
                 project: "project".into(),
                 build_type: "Debug".into(),
                 compiler_path: "gcc".into(),
-                sanitizer: Some("asan".into())
+                sanitizer: Some("asan")
             }.to_path().to_string_lossy(),
             "project/build/debug-gcc-asan"
         );
