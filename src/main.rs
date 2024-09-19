@@ -128,9 +128,13 @@ fn run(target: &String, build_dir: &PathBuf, config: &Config, args: &ExeArgs) ->
                     let debugger = config.get::<String>("debugger")
                         .map_err(|e| format!("No debugger is configured: {e}"))?;
 
-                    let mut cmd = Command::new(debugger);
-                    cmd.arg("--args");
-                    cmd.arg(&exes[0]);
+                    let mut cmd = Command::new(&debugger);
+                    if debugger == "gdb" {
+                        cmd.arg("--args");
+                        cmd.arg(&exes[0]);
+                    } else if debugger == "lldb" {
+                        cmd.arg(&exes[0]);
+                    }
                     Ok(cmd)
                 } else {
                     Ok(Command::new(&exes[0]))
