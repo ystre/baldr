@@ -4,7 +4,6 @@ pub mod cmake;
 pub mod utils;
 
 use crate::utils::format_cmd;
-use crate::cli::{Commands, ExeArgs};
 
 use clap::Parser;
 use config::Config;
@@ -108,14 +107,17 @@ fn build(args: &cli::Args, config: &Config, build_dir: &PathBuf, build_exists: b
         cmake::configure(build_dir, args, config)?;
     }
 
-    cmake::build(build_dir, args)?;
+    if !cmake::build(build_dir, args)?.success() {
+        return Err("Build failed".into());
+    }
+
     create_compile_cmd_symlink(build_dir, &args.project.clone().into())
         .map_err(|e| format!("Failed to create a symlink for `compile_commands.json`: {e}"))?;
 
     Ok(())
 }
 
-fn run(target: &String, build_dir: &PathBuf, config: &Config, args: &ExeArgs) -> Result<ExitStatus, String> {
+fn run(target: &String, build_dir: &PathBuf, config: &Config, args: &cli::Args) -> Result<ExitStatus, String> {
     if target == "all" {
         return Err("Target must be specified".into());
     }
@@ -141,7 +143,7 @@ fn run(target: &String, build_dir: &PathBuf, config: &Config, args: &ExeArgs) ->
                 }
             })()?;
 
-            cmd.args(&args.args);
+            cmd.args(&args.exe_args);
             let mut process = cmd.spawn().map_err(|e| format!("Failed to run the built executable: {e}"))?;
             let cmd_str = format_cmd(&cmd);
             Ok(process.wait().map_err(|e| format!("Command `{cmd_str}` did not start; {e}"))?)
@@ -152,11 +154,7 @@ fn run(target: &String, build_dir: &PathBuf, config: &Config, args: &ExeArgs) ->
     }
 }
 
-fn main() -> Result<(), String> {
-    env_logger::builder()
-        .format_timestamp_millis()
-        .init();
-
+fn entrypoint() -> Result<(), String> {
     let args = cli::Args::parse();
     let config = cfg::read_config(&args.config).map_err(|e| e.to_string())?;
 
@@ -191,17 +189,25 @@ fn main() -> Result<(), String> {
         }
     }
 
-    match &args.command {
-        Commands::Build{} => {
-            build(&args, &config, &build_dir, build_exists)?;
-        }
-        Commands::Run(exe_args) => {
-            build(&args, &config, &build_dir, build_exists)?;
-            run(&args.target, &build_dir, &config, exe_args).map_err(|e| format!("Failed to run executable: {e}"))?;
-        }
+    build(&args, &config, &build_dir, build_exists)?;
+
+    if args.run {
+        run(&args.target, &build_dir, &config, &args).map_err(|e| format!("Failed to run executable: {e}"))?;
     }
 
     Ok(())
+}
+
+fn main() {
+    env_logger::builder()
+        .format_timestamp_millis()
+        .init();
+
+    let result = entrypoint();
+    if result.is_err() {
+        log::error!("{}", result.err().unwrap());
+        std::process::exit(1);
+    }
 }
 
 #[cfg(test)]

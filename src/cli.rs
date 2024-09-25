@@ -1,22 +1,5 @@
 use clap;
 
-#[derive(clap::Args)]
-pub struct ExeArgs {
-    /// Run under debugger
-    #[arg(long)]
-    pub debug: bool,
-
-    /// Arguments to be forwarded to the executable
-    #[arg(last = true)]
-    pub args: Vec<String>,
-}
-
-#[derive(clap::Subcommand)]
-pub enum Commands {
-    Build{},
-    Run(ExeArgs),
-}
-
 /// Baldur, a C++/CMake project builder.
 ///
 /// Build, run and debug.
@@ -84,6 +67,15 @@ pub struct Args {
     #[arg(long)]
     pub config: Option<String>,
 
-    #[command(subcommand)]
-    pub command: Commands,
+    /// Run the built binary
+    #[arg(short, long, default_value_t=false)]
+    pub run: bool,
+
+    /// Run under debugger
+    #[arg(long)]
+    pub debug: bool,
+
+    /// Arguments to be forwarded to the executable
+    #[arg(last = true)]
+    pub exe_args: Vec<String>,
 }
