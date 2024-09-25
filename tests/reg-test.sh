@@ -17,7 +17,7 @@ result=$(
         --target test \
         -DDEFINE1=v1 \
         --cmake-define DEFINE2=v2 \
-        run \
+        --run \
         -- \
         arg1 arg2 arg3
 )
