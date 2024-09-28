@@ -11,17 +11,16 @@ use config::Config;
 use log::*;
 
 use std::{
-    io::{
-        self,
-        BufRead,
-        Write
-    },
-    os::unix::fs,
+    io,
+    fs,
+    fmt,
+    os::unix::fs::symlink,
     path::{
         Path,
         PathBuf
     },
     process::{
+        self,
         Command,
         ExitStatus
     }
@@ -45,8 +44,8 @@ impl<'a> BuildPath<'a> {
     ///
     fn to_path(&self) -> PathBuf {
         let compiler = match self.compiler_path {
-            "" => "".into(),
-            _  => format!("-{}", Path::new(&self.compiler_path).file_name().unwrap().to_string_lossy().to_string()),
+            "" => String::new(),
+            _  => format!("-{}", Path::new(&self.compiler_path).file_name().expect("Invalid compiler path").to_string_lossy()),
         };
 
         let dir = format!(
@@ -54,8 +53,8 @@ impl<'a> BuildPath<'a> {
             self.build_type.to_lowercase(),
             compiler,
             match self.sanitizer {
-                Some(san) => format!("-{}", san),
-                None => "".into()
+                Some(san) => format!("-{san}"),
+                None => String::new()
             }
         );
 
@@ -65,27 +64,25 @@ impl<'a> BuildPath<'a> {
     }
 }
 
-impl std::fmt::Display for BuildPath<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for BuildPath<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_fmt(format_args!("{}", self.to_path().display()))
     }
 }
 
-fn create_compile_cmd_symlink(src: &PathBuf, dst: &PathBuf) -> Result<(), io::Error> {
+fn create_compile_cmd_symlink(src: &Path, dst: &Path) -> Result<(), io::Error> {
     let file = "compile_commands.json";
-    if std::fs::exists(dst.join(file)).is_err() {
-        return fs::symlink(src.join(file), dst.join(file));
+    if fs::exists(dst.join(file)).is_err() {
+        return symlink(src.join(file), dst.join(file));
     }
     Ok(())
 }
 
-fn delete_build_dir(build_dir: &PathBuf, confirm: bool) -> Result<bool, String> {
+fn delete_build_dir(build_dir: &Path, confirm: bool) -> Result<bool, String> {
     if confirm {
         eprint!("Are you sure to remove `{}` (press 'y' to proceed): ", build_dir.to_string_lossy());
-        io::stdout().lock().flush().unwrap();
-        let answer = io::stdin().lock().lines().next().unwrap().unwrap();
 
-        if answer != "y" {
+        if utils::read_input() != "y" {
             info!("Skipping clean build.");
             return Ok(false);
         }
@@ -95,15 +92,13 @@ fn delete_build_dir(build_dir: &PathBuf, confirm: bool) -> Result<bool, String> 
         info!("Non-interactive mode, skipping confirmation for deleting build directory.");
     }
 
-    std::fs::remove_dir_all(&build_dir).map_err(|e| format!("Failed to delete build directory: {e}"))?;
+    fs::remove_dir_all(build_dir).map_err(|e| format!("Failed to delete build directory: {e}"))?;
     info!("Build directory deleted!");
     Ok(true)
 }
 
-fn build(args: &cli::Args, config: &Config, build_dir: &PathBuf, build_exists: bool) -> Result<(), String> {
-    if !build_exists {
-        cmake::configure(build_dir, args, config)?;
-    } else if !args.no_configure {
+fn build(args: &cli::Args, config: &Config, build_dir: &Path, build_exists: bool) -> Result<(), String> {
+    if !build_exists || !args.no_configure {
         cmake::configure(build_dir, args, config)?;
     }
 
@@ -111,7 +106,7 @@ fn build(args: &cli::Args, config: &Config, build_dir: &PathBuf, build_exists: b
         return Err("Build failed".into());
     }
 
-    create_compile_cmd_symlink(build_dir, &args.project.clone().into())
+    create_compile_cmd_symlink(build_dir, Path::new(&args.project))
         .map_err(|e| format!("Failed to create a symlink for `compile_commands.json`: {e}"))?;
 
     Ok(())
@@ -149,8 +144,8 @@ fn run(target: &String, build_dir: &PathBuf, config: &Config, args: &cli::Args) 
             Ok(process.wait().map_err(|e| format!("Command `{cmd_str}` did not start; {e}"))?)
 
         },
-        0 => Err(format!("No executable found in `{}`", build_dir.display()).into()),
-        _ => Err(format!("Multiple executables found in `{}`", build_dir.display()).into()),
+        0 => Err(format!("No executable found in `{}`", build_dir.display())),
+        _ => Err(format!("Multiple executables found in `{}`", build_dir.display())),
     }
 }
 
@@ -167,13 +162,13 @@ fn entrypoint() -> Result<(), String> {
 
     info!("Using build directory: {}", build_dir.to_string_lossy());
 
-    let mut build_exists = match std::fs::exists(&build_dir) {
+    let mut build_exists = match fs::exists(&build_dir) {
         Ok(true) => {
             info!("Build directory already exists.");
             Ok(true)
         },
         Ok(false) => Ok(false),
-        Err(x) => Err(format!("{}", x)),
+        Err(x) => Err(format!("{x}")),
     }?;
 
     if args.delete {
@@ -184,7 +179,7 @@ fn entrypoint() -> Result<(), String> {
         }
 
         if !build_exists {
-            std::fs::create_dir_all(&build_dir).map_err(|e| format!("Failed to create build directory: {e}"))?;
+            fs::create_dir_all(&build_dir).map_err(|e| format!("Failed to create build directory: {e}"))?;
             info!("Build directory has been created.");
         }
     }
@@ -203,10 +198,12 @@ fn main() {
         .format_timestamp_millis()
         .init();
 
-    let result = entrypoint();
-    if result.is_err() {
-        log::error!("{}", result.err().unwrap());
-        std::process::exit(1);
+    match entrypoint() {
+        Ok(()) => {},
+        Err(e) => {
+            log::error!("Fatal error encountered: {e}");
+            process::exit(1);
+        }
     }
 }
 

@@ -1,26 +1,49 @@
-use config::Config;
+use config::builder::DefaultState;
+use config::{Config, ConfigBuilder};
 
+use std::env;
+use std::path::Path;
+
+fn read_one_config(var: &str, cfg: ConfigBuilder<DefaultState>) -> ConfigBuilder<DefaultState> {
+    if let Ok(x) = env::var(var) {
+        log::debug!("Config found in {var}.");
+
+        let config_path = Path::new(&x).join("baldr");
+
+        cfg.add_source(
+            config::File::with_name(config_path.to_str().expect("Non UTF-8 string in path")
+        ).required(false))
+    }
+    else {
+        log::debug!("{var} is not defined.");
+        cfg
+    }
+}
+
+/// Read configuration from environment variables and files.
+///
+/// Files are looked in the following directories:
+/// * XDG_CONFIG_HOME
+/// * HOME
+/// * Current working directory
+///
+/// # Errors
+///
+/// Returns an error if config files exist but cannot be read or the configuration is invalid.
 pub fn read_config(config_override: &Option<String>) -> Result<Config, config::ConfigError> {
     let mut config = Config::builder()
         .add_source(config::Environment::with_prefix("BALDR"));
 
-    if config_override.is_some() {
-        config = config.add_source(config::File::with_name(config_override.as_ref().unwrap().as_str()));
-    }
-    else {
-        let xdg_home = std::env::var("XDG_CONFIG_HOME");
-        if xdg_home.is_ok() {
-            let xdg_config = std::path::Path::new(&xdg_home.unwrap()).join("baldr");
-            config = config.add_source(config::File::with_name(xdg_config.to_str().unwrap()).required(false));
+    config = match config_override {
+        Some(x) => {
+            config.add_source(config::File::with_name(x.as_str()))
+        },
+        None => {
+            config = read_one_config("XDG_CONFIG_HOME", config);
+            config = read_one_config("HOME", config);
+            config.add_source(config::File::with_name("./baldr").required(false))
         }
-
-        let home = std::env::var("HOME").expect("HOME env variable is not defined!");
-        let home_config = std::path::Path::new(&home).join("baldr");
-
-        config = config
-            .add_source(config::File::with_name(home_config.to_str().unwrap()).required(false))
-            .add_source(config::File::with_name("./baldr").required(false));
-    }
+    };
 
     config.build()
 }
@@ -56,7 +79,7 @@ mod tests {
     fn config() -> Config {
         Config::builder().add_source(
             config::File::with_name(
-                std::path::Path::new(".")
+                Path::new(".")
                     .join("examples")
                     .join("baldr")
                     .to_str()

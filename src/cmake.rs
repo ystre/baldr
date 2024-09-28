@@ -5,15 +5,20 @@ use crate::cli;
 use config::Config;
 use log::*;
 
+use std::path::Path;
 use std::process::{ExitStatus, Command};
-use std::path::PathBuf;
 
-pub fn configure(path: &PathBuf, args: &cli::Args, config: &Config) -> Result<ExitStatus, String> {
+/// Invoke CMake's configure command.
+///
+/// # Errors
+///
+/// Returns an error, if the process cannot be started.
+pub fn configure(path: &Path, args: &cli::Args, config: &Config) -> Result<ExitStatus, String> {
     let mut cmd = Command::new("cmake");
 
     let cc: String = config.get("compiler.cc").unwrap_or_default();
     let cxx: String = config.get("compiler.cxx").unwrap_or_default();
-    if cc != "" && cxx != "" {
+    if !cc.is_empty() && !cxx.is_empty() {
         cmd.env("CC", cc);
         cmd.env("CXX", cxx);
     }
@@ -26,20 +31,25 @@ pub fn configure(path: &PathBuf, args: &cli::Args, config: &Config) -> Result<Ex
     ]);
 
     for arg in &args.cmake_args {
-        cmd.arg(format!("-D{}", arg));
+        cmd.arg(format!("-D{arg}"));
     }
 
-    for arg in get_cmake_definitions(&config) {
+    for arg in get_cmake_definitions(config) {
         cmd.arg(format!("-D{arg}"));
     }
 
     let cmd_str = format_cmd(&cmd);
     debug!("{}", cmd_str);
     let mut process = cmd.spawn().map_err(|e| format!("Spawning command `{cmd_str}` failed with `{e}`"))?;
-    Ok(process.wait().map_err(|e| format!("Command `{cmd_str}` did not start; {e}"))?)
+    process.wait().map_err(|e| format!("Command `{cmd_str}` did not start; {e}"))
 }
 
-pub fn build(path: &PathBuf, args: &cli::Args) -> Result<ExitStatus, String> {
+/// Invoke CMake's build command.
+///
+/// # Errors
+///
+/// Returns an error, if the process cannot be started.
+pub fn build(path: &Path, args: &cli::Args) -> Result<ExitStatus, String> {
     let mut cmd = Command::new("cmake");
     cmd.args([
         "--build", &path.to_string_lossy(),
@@ -51,5 +61,5 @@ pub fn build(path: &PathBuf, args: &cli::Args) -> Result<ExitStatus, String> {
     let cmd_str = format_cmd(&cmd);
     debug!("{}", cmd_str);
     let mut process = cmd.spawn().map_err(|e| format!("Spawning command `{cmd_str}` failed with `{e}`"))?;
-    Ok(process.wait().map_err(|e| format!("Command `{cmd_str}` did not start; {e}"))?)
+    process.wait().map_err(|e| format!("Command `{cmd_str}` did not start; {e}"))
 }

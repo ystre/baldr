@@ -26,6 +26,9 @@ jobs:
         sudo apt update
         sudo apt install -y build-essential cmake
 
+    - name: Lint
+      run: cargo clippy -- -Dwarnings
+
     - name: Build
       run: cargo build
 

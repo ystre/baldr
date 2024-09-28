@@ -2,6 +2,7 @@ use walkdir::WalkDir;
 
 use std::path::PathBuf;
 use std::process::Command;
+use std::io::{self, BufRead, Write};
 
 /// Recursively searches for files in a directory and applies a callback to filter the results.
 ///
@@ -32,10 +33,33 @@ where
     found_files
 }
 
+/// Format a command.
+///
+/// Useful for debugging purposes.
+///
+/// ```
+/// use std::process::Command;
+///
+/// let mut cmd = Command::new("echo")
+/// cmd.args(["hello", "there"])
+///
+/// assert_eq!(format_cmd(cmd), "echo hello there");
+/// ```
 pub fn format_cmd(cmd: &Command) -> String {
     format!(
         "{} {}",
         cmd.get_program().to_string_lossy(),
         cmd.get_args().map(|x| x.to_string_lossy()).collect::<Vec<_>>().join(" ")
     )
+}
+
+/// Read input from `stdin`.
+///
+/// # Panics
+///
+/// Will panic in case of IO error. Cannot be handled in any meaningful way.
+#[allow(clippy::unwrap_used)]
+pub fn read_input() -> String {
+    io::stdout().lock().flush().unwrap();
+    io::stdin().lock().lines().next().unwrap().unwrap()
 }
