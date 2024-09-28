@@ -22,7 +22,11 @@ fn command() -> Command {
 
 #[test]
 fn compile_commands_symlink() -> AnyError {
-    command().assert().success().stderr(predicate::str::contains("symlink already exists and is valid"));
+    command().assert().success().stderr(
+        predicate::str::contains("`compile_commands.json` symlink already exists and is valid.").or(
+        predicate::str::contains("Creating `compile_commands.json` symlink...")
+    ));
+
     assert!(fs::symlink_metadata(Path::new(TARGET))?.is_symlink());
     Ok(())
 }
@@ -34,7 +38,7 @@ fn compile_commands_symlink_broken() -> AnyError {
     let _ = std::fs::remove_file(target);
     std::os::unix::fs::symlink("/non-existent", target).unwrap();
 
-    command().assert().success().stderr(predicate::str::contains("symlink is removed"));
+    command().assert().success().stderr(predicate::str::contains("Broken `compile_commands.json` symlink is removed."));
     assert!(fs::symlink_metadata(target)?.is_symlink());
 
     std::fs::remove_file(target).unwrap();

@@ -81,14 +81,16 @@ fn create_compile_cmd_symlink(src: &Path, dst: &Path) -> Result<(), io::Error> {
 
     match fs::exists(&dst) {
         Ok(true) => {
-            debug!("`compile_commands.json` symlink already exists and is valid");
+            debug!("`compile_commands.json` symlink already exists and is valid.");
             Ok(())
         }
         Ok(false) => {
             match fs::remove_file(&dst) {
                 Ok(()) => { debug!("Broken `compile_commands.json` symlink is removed."); },
-                Err(e) => { debug!("{e}"); },
+                Err(e) => { debug!("`compile_commands.json` symlink cannot be removed: {e}"); },
             };
+
+            debug!("Creating `compile_commands.json` symlink...");
             symlink(src, &dst)
         }
         Err(e) => Err(e),

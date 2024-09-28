@@ -226,7 +226,7 @@ pub fn configure(path: &Path, args: &Args, config: &Config) -> Result<ExitStatus
     }
 
     let cmd_str = format_cmd(&cmd);
-    debug!("{}", cmd_str);
+    debug!("CMD: {}", cmd_str);
     let mut process = cmd.spawn().map_err(|e| format!("Spawning command `{cmd_str}` failed with `{e}`"))?;
     process.wait().map_err(|e| format!("Command `{cmd_str}` did not start; {e}"))
 }
@@ -246,7 +246,7 @@ pub fn build(path: &Path, args: &Args) -> Result<ExitStatus, String> {
     ]);
 
     let cmd_str = format_cmd(&cmd);
-    debug!("{}", cmd_str);
+    debug!("CMD: {}", cmd_str);
     let mut process = cmd.spawn().map_err(|e| format!("Spawning command `{cmd_str}` failed with `{e}`"))?;
     process.wait().map_err(|e| format!("Command `{cmd_str}` did not start; {e}"))
 }

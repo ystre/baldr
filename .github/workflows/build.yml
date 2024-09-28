@@ -34,6 +34,7 @@ jobs:
 
     - name: Test
       env:
+        RUST_LOG: debug
         RUST_BACKTRACE: 1
       run: cargo test -- --test-threads 1
 
