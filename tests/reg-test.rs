@@ -67,6 +67,8 @@ fn cmake_definitions() -> AnyError {
         "-DDEFINE1=v1",
         "--cmake-define", "DEFINE2=v2",
         "--run",
+        "--delete",
+        "--no-confirm",
     ]);
 
     cmd.assert()
@@ -87,6 +89,8 @@ fn cmake_definitions_2() -> AnyError {
         "-DDEFINE1=v17",
         "--cmake-define", "DEFINE2=v19",
         "--run",
+        "--delete",
+        "--no-confirm",
     ]);
 
     cmd.assert()
@@ -106,6 +110,8 @@ fn cmake_definitions_3_no_configure() -> AnyError {
         "--target", "test",
         "-DDEFINE1=v17",
         "--run",
+        "--delete",
+        "--no-confirm",
     ]);
 
     cmd1.assert().success();
