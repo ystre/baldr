@@ -1,12 +1,15 @@
-pub mod cli;
-pub mod cfg;
-pub mod cmake;
-pub mod utils;
-
-use crate::utils::format_cmd;
-
 use clap::Parser;
 use config::Config;
+
+use baldr::{
+    Args,
+    build,
+    configure,
+    find_files,
+    format_cmd,
+    read_config,
+    read_input,
+};
 
 use log::*;
 
@@ -82,7 +85,7 @@ fn delete_build_dir(build_dir: &Path, confirm: bool) -> Result<bool, String> {
     if confirm {
         eprint!("Are you sure to remove `{}` (press 'y' to proceed): ", build_dir.to_string_lossy());
 
-        if utils::read_input() != "y" {
+        if read_input() != "y" {
             info!("Skipping clean build.");
             return Ok(false);
         }
@@ -97,27 +100,12 @@ fn delete_build_dir(build_dir: &Path, confirm: bool) -> Result<bool, String> {
     Ok(true)
 }
 
-fn build(args: &cli::Args, config: &Config, build_dir: &Path, build_exists: bool) -> Result<(), String> {
-    if !build_exists || !args.no_configure {
-        cmake::configure(build_dir, args, config)?;
-    }
-
-    if !cmake::build(build_dir, args)?.success() {
-        return Err("Build failed".into());
-    }
-
-    create_compile_cmd_symlink(build_dir, Path::new(&args.project))
-        .map_err(|e| format!("Failed to create a symlink for `compile_commands.json`: {e}"))?;
-
-    Ok(())
-}
-
-fn run(target: &String, build_dir: &PathBuf, config: &Config, args: &cli::Args) -> Result<ExitStatus, String> {
+fn run(target: &String, build_dir: &PathBuf, config: &Config, args: &Args) -> Result<ExitStatus, String> {
     if target == "all" {
         return Err("Target must be specified".into());
     }
 
-    let exes = utils::find_files(build_dir, |filename| { filename == *target });
+    let exes = find_files(build_dir, |filename| { filename == *target });
     match exes.len() {
         1 => {
             let mut cmd = (|| -> Result<Command, String> {
@@ -150,8 +138,8 @@ fn run(target: &String, build_dir: &PathBuf, config: &Config, args: &cli::Args) 
 }
 
 fn entrypoint() -> Result<(), String> {
-    let args = cli::Args::parse();
-    let config = cfg::read_config(&args.config).map_err(|e| e.to_string())?;
+    let args = Args::parse();
+    let config = read_config(&args.config).map_err(|e| e.to_string())?;
 
     let build_dir = BuildPath{
         project: args.project.as_str(),
@@ -184,7 +172,16 @@ fn entrypoint() -> Result<(), String> {
         }
     }
 
-    build(&args, &config, &build_dir, build_exists)?;
+    if !build_exists || !args.no_configure {
+        configure(build_dir.as_path(), &args, &config)?;
+    }
+
+    if !build(build_dir.as_path(), &args)?.success() {
+        return Err("Build failed".into());
+    }
+
+    create_compile_cmd_symlink(build_dir.as_path(), Path::new(&args.project))
+        .map_err(|e| format!("Failed to create a symlink for `compile_commands.json`: {e}"))?;
 
     if args.run {
         run(&args.target, &build_dir, &config, &args).map_err(|e| format!("Failed to run executable: {e}"))?;
