@@ -86,7 +86,7 @@ fn create_compile_cmd_symlink(src: &Path, dst: &Path) -> Result<(), io::Error> {
         }
         Ok(false) => {
             match fs::remove_file(&dst) {
-                Ok(_) => { debug!("Broken `compile_commands.json` symlink is removed."); },
+                Ok(()) => { debug!("Broken `compile_commands.json` symlink is removed."); },
                 Err(e) => { debug!("{e}"); },
             };
             symlink(src, &dst)

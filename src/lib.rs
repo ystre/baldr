@@ -3,7 +3,6 @@ use std::io::{self, BufRead, Write};
 use std::path::{Path,PathBuf};
 use std::process::{ExitStatus, Command};
 
-use clap;
 use config::builder::DefaultState;
 use config::{Config, ConfigBuilder};
 use walkdir::WalkDir;
