@@ -2,6 +2,22 @@
 name = "baldr"
 version = "0.1.0"
 edition = "2021"
+authors = [
+    "Chris <gk.project72@gmail.com>",
+]
+description = "Convenience tool for building and running C++ code."
+homepage = "https://github.com/ystre/baldr"
+documentation = "http://docs.rs/baldr/"
+readme = "README.md"
+keywords = [
+    "cli",
+    "cpp",
+    "build",
+    "tool",
+]
+categories = ["development-tools::build-utils"]
+license = "UNLICENSE"
+repository = "https://github.com/ystre/baldr.git"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
