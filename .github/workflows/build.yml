@@ -32,11 +32,8 @@ jobs:
     - name: Build
       run: cargo build
 
-    - name: Unit Test
-      run: cargo test
+    - name: Test
+      run: cargo test -- --test-threads 1
 
     - name: Build release
       run: cargo build --release
-
-    - name: Regression Test
-      run: ./tests/reg-test.sh

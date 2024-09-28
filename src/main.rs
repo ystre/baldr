@@ -184,7 +184,7 @@ fn entrypoint() -> Result<(), String> {
         .map_err(|e| format!("Failed to create a symlink for `compile_commands.json`: {e}"))?;
 
     if args.run {
-        run(&args.target, &build_dir, &config, &args).map_err(|e| format!("Failed to run executable: {e}"))?;
+        run(&args.target, &build_dir, &config, &args)?;
     }
 
     Ok(())
