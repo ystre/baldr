@@ -19,6 +19,7 @@ use std::{
     fmt,
     os::unix::fs::symlink,
     path::{
+        self,
         Path,
         PathBuf
     },
@@ -75,10 +76,23 @@ impl fmt::Display for BuildPath<'_> {
 
 fn create_compile_cmd_symlink(src: &Path, dst: &Path) -> Result<(), io::Error> {
     let file = "compile_commands.json";
-    if fs::exists(dst.join(file)).is_err() {
-        return symlink(src.join(file), dst.join(file));
+    let src = path::absolute(src.join(file))?;
+    let dst = dst.join(file);
+
+    match fs::exists(&dst) {
+        Ok(true) => {
+            debug!("`compile_commands.json` symlink already exists and is valid");
+            Ok(())
+        }
+        Ok(false) => {
+            match fs::remove_file(&dst) {
+                Ok(_) => { debug!("Broken `compile_commands.json` symlink is removed."); },
+                Err(e) => { debug!("{e}"); },
+            };
+            symlink(src, &dst)
+        }
+        Err(e) => Err(e),
     }
-    Ok(())
 }
 
 fn delete_build_dir(build_dir: &Path, confirm: bool) -> Result<bool, String> {
