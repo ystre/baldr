@@ -21,9 +21,23 @@ repository = "https://github.com/ystre/baldr.git"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[dependencies]
+[dev-dependencies]
+assert_cmd = { version = "2.0.16", features = ["color", "color-auto"] }
+assert_fs = "1.1.2"
+predicates = "3.1.2"
 
+[dependencies]
 clap = { version = "4.5.4", features = ["derive"] }
+config = "0.14.0"
 env_logger = "0.11.3"
 log = "0.4.21"
 walkdir = "2.5.0"
+
+[lints.clippy]
+unwrap_used = "warn"
+single_match_else = "warn"
+uninlined_format_args = "warn"
+missing_errors_doc = "warn"
+missing_panics_doc = "warn"
+manual_string_new = "warn"
+ignored_unit_patterns = "warn"

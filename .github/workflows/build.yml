@@ -26,11 +26,17 @@ jobs:
         sudo apt update
         sudo apt install -y build-essential cmake
 
+    - name: Lint
+      run: cargo clippy -- -Dwarnings
+
     - name: Build
       run: cargo build
 
-    - name: Unit Test
-      run: cargo test
+    - name: Test
+      env:
+        RUST_LOG: debug
+        RUST_BACKTRACE: 1
+      run: cargo test -- --test-threads 1
 
-    - name: Regression Test
-      run: ./tests/reg-test.sh
+    - name: Build release
+      run: cargo build --release
