@@ -203,8 +203,8 @@ mod tests {
 pub fn configure(path: &Path, args: &Args, config: &Config) -> Result<ExitStatus, String> {
     let mut cmd = Command::new("cmake");
 
-    let cc: String = config.get("compiler.cc").unwrap_or_default();
-    let cxx: String = config.get("compiler.cxx").unwrap_or_default();
+    let cc: String = get_cc(&config).unwrap_or_default();
+    let cxx: String = get_cxx(&config).unwrap_or_default();
     if !cc.is_empty() && !cxx.is_empty() {
         cmd.env("CC", cc);
         cmd.env("CXX", cxx);
