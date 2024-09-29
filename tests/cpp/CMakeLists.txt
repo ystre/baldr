@@ -22,3 +22,7 @@ endif()
 if(DEFINE2)
     target_compile_definitions(test PRIVATE DEFINE2=${DEFINE2})
 endif()
+
+if(CONFIGURE_FAILURE)
+    find_package(non-existent REQUIRED)
+endif()

@@ -12,6 +12,8 @@ fn build() -> AnyError {
     cmd.args([
         "--project", "./tests/cpp",
         "--target", "test",
+        "--delete",
+        "--no-confirm",
     ]);
 
     cmd.assert().success();
@@ -26,7 +28,9 @@ fn build_and_run() -> AnyError {
     cmd.args([
         "--project", "./tests/cpp",
         "--target", "test",
-        "--run"
+        "--run",
+        "--delete",
+        "--no-confirm",
     ]);
 
     cmd.assert()
@@ -46,6 +50,8 @@ fn arguments() -> AnyError {
         "--project", "./tests/cpp",
         "--target", "test",
         "--run",
+        "--delete",
+        "--no-confirm",
         "--", "arg1", "arg2", "arg3"
     ]);
 
