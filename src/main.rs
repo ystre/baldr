@@ -189,7 +189,9 @@ fn entrypoint() -> Result<(), String> {
     }
 
     if !build_exists || !args.no_configure {
-        configure(build_dir.as_path(), &args, &config)?;
+        if !configure(build_dir.as_path(), &args, &config)?.success() {
+            return Err("Configuring failed".into());
+        }
     }
 
     if !build(build_dir.as_path(), &args)?.success() {
