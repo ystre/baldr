@@ -15,6 +15,8 @@ fn command() -> Command {
     cmd.args([
         "--project", "./tests/cpp",
         "--target", "test",
+        "--delete",
+        "--no-confirm",
     ]);
 
     cmd
