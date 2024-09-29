@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.2.1](https://github.com/ystre/baldr/compare/v0.2.0...v0.2.1) - 2024-09-29
 
-### Other
+### Fixes
 
 - Making CMake configure failure fatal ([#9](https://github.com/ystre/baldr/pull/9))
 
