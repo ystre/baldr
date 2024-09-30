@@ -91,7 +91,7 @@ pub struct Args {
 
 fn read_one_config(var: &str, cfg: ConfigBuilder<DefaultState>) -> ConfigBuilder<DefaultState> {
     if let Ok(x) = env::var(var) {
-        log::debug!("Config found in {var}.");
+        log::debug!("Looking for config in {var}.");
 
         let config_path = Path::new(&x).join("baldr");
 
