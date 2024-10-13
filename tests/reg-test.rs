@@ -9,6 +9,7 @@ type AnyError = Result<(), Box<dyn std::error::Error>>;
 fn build() -> AnyError {
     let mut cmd = Command::cargo_bin(assert_cmd::crate_name!())?;
 
+    // TODO(refact): pull out the common part of the command to a function.
     cmd.args([
         "--project", "./tests/cpp",
         "--target", "test",
