@@ -168,7 +168,7 @@ fn run(target: &String, build_dir: &PathBuf, config: &Config, args: &Args) -> Re
                 Some(code) => Err(format!("Process has returned with exit code: {code}")),
                 None => match result.signal() {
                     Some(code) => Err(format!("Process has been made to exit with signal: {code}")),
-                    None => Err(format!("Unknown error during checking exit code")),
+                    None => Err("Unknown error during checking exit code".to_string()),
                 }
             }
 
