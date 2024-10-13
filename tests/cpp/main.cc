@@ -24,5 +24,9 @@ int main(int argc, char* args[]) {
 
     std::cout << '\n';
 
+    if (argc == 2) {
+        return std::stoi(args[1]);
+    }
+
     return EXIT_SUCCESS;
 }

@@ -17,7 +17,10 @@ use std::{
     io,
     fs,
     fmt,
-    os::unix::fs::symlink,
+    os::unix::{
+        fs::symlink,
+        process::ExitStatusExt
+    },
     path::{
         self,
         Path,
@@ -26,7 +29,6 @@ use std::{
     process::{
         self,
         Command,
-        ExitStatus
     }
 };
 
@@ -116,7 +118,19 @@ fn delete_build_dir(build_dir: &Path, confirm: bool) -> Result<bool, String> {
     Ok(true)
 }
 
-fn run(target: &String, build_dir: &PathBuf, config: &Config, args: &Args) -> Result<ExitStatus, String> {
+/// Run the built executable with the given arguments optionall under a debugger.
+///
+/// Supported debuggers:
+/// - `gdb`: `gdb --args <EXECUTABLE> <ARGS> ...`
+/// - `lldb`: lldb <EXECUTABLE> <ARGS> ...`
+///
+/// # Errors
+///
+/// Returns an error in the following cases:
+/// - Target is not specified ("all" can build multiple executables)
+/// - Debugger is not configured or is unsupported when it is asked to run under debugger
+/// - The built executable returns with other than exit code 0
+fn run(target: &String, build_dir: &PathBuf, config: &Config, args: &Args) -> Result<(), String> {
     if target == "all" {
         return Err("Target must be specified".into());
     }
@@ -135,6 +149,8 @@ fn run(target: &String, build_dir: &PathBuf, config: &Config, args: &Args) -> Re
                         cmd.arg(&exes[0]);
                     } else if debugger == "lldb" {
                         cmd.arg(&exes[0]);
+                    } else {
+                        return Err("Unsupported debugger: `{debugger}`!".into());
                     }
                     Ok(cmd)
                 } else {
@@ -145,7 +161,16 @@ fn run(target: &String, build_dir: &PathBuf, config: &Config, args: &Args) -> Re
             cmd.args(&args.exe_args);
             let mut process = cmd.spawn().map_err(|e| format!("Failed to run the built executable: {e}"))?;
             let cmd_str = format_cmd(&cmd);
-            Ok(process.wait().map_err(|e| format!("Command `{cmd_str}` did not start; {e}"))?)
+            let result = process.wait().map_err(|e| format!("Command `{cmd_str}` did not start: {e}"))?;
+
+            match result.code() {
+                Some(0) => Ok(()),
+                Some(code) => Err(format!("Process has returned with exit code: {code}")),
+                None => match result.signal() {
+                    Some(code) => Err(format!("Process has been made to exit with signal: {code}")),
+                    None => Err("Unknown error during checking exit code".to_string()),
+                }
+            }
 
         },
         0 => Err(format!("No executable found in `{}`", build_dir.display())),
@@ -202,6 +227,7 @@ fn entrypoint() -> Result<(), String> {
 
     if args.run {
         run(&args.target, &build_dir, &config, &args)?;
+        info!("Built exectuable has been successfully run.");
     }
 
     Ok(())

@@ -116,8 +116,7 @@ fn read_one_config(var: &str, cfg: ConfigBuilder<DefaultState>) -> ConfigBuilder
 ///
 /// Returns an error if config files exist but cannot be read or the configuration is invalid.
 pub fn read_config(config_override: &Option<String>) -> Result<Config, config::ConfigError> {
-    let mut config = Config::builder()
-        .add_source(config::Environment::with_prefix("BALDR"));
+    let mut config = Config::builder();
 
     config = match config_override {
         Some(x) => {
@@ -130,7 +129,9 @@ pub fn read_config(config_override: &Option<String>) -> Result<Config, config::C
         }
     };
 
-    config.build()
+    config
+        .add_source(config::Environment::with_prefix("BALDR"))
+        .build()
 }
 
 pub fn get_cc(cfg: &Config) -> Option<String> {
@@ -154,44 +155,6 @@ pub fn get_cmake_definitions(cfg: &Config) -> Vec<String> {
                 .filter_map(|x| x.clone().into_string().ok())
                 .collect(),
         Err(_) => [].to_vec(),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn config() -> Config {
-        Config::builder().add_source(
-            config::File::with_name(
-                Path::new(".")
-                    .join("examples")
-                    .join("baldr")
-                    .to_str()
-                    .unwrap()
-            )
-        ).build().unwrap()
-    }
-
-    #[test]
-    fn cfg_cc() {
-        assert_eq!(get_cc(&config()), Some("gcc".into()));
-    }
-
-    #[test]
-    fn cfg_cxx() {
-        assert_eq!(get_cxx(&config()), Some("g++".into()));
-    }
-
-    #[test]
-    fn cfg_cmake_definitions() {
-        assert_eq!(
-            get_cmake_definitions(&config()),
-            vec![
-                "CFG1=cfg1",
-                "CFG2=cfg2",
-            ]
-        );
     }
 }
 
@@ -310,4 +273,40 @@ pub fn format_cmd(cmd: &Command) -> String {
 pub fn read_input() -> String {
     io::stdout().lock().flush().unwrap();
     io::stdin().lock().lines().next().unwrap().unwrap()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn config() -> Config {
+        Config::builder().add_source(
+            config::File::with_name(
+                Path::new("baldr")
+                    .to_str()
+                    .unwrap()
+            )
+        ).build().unwrap()
+    }
+
+    #[test]
+    fn cfg_cc() {
+        assert_eq!(get_cc(&config()), Some("gcc".into()));
+    }
+
+    #[test]
+    fn cfg_cxx() {
+        assert_eq!(get_cxx(&config()), Some("g++".into()));
+    }
+
+    #[test]
+    fn cfg_cmake_definitions() {
+        assert_eq!(
+            get_cmake_definitions(&config()),
+            vec![
+                "CFG1=cfg1",
+                "CFG2=cfg2",
+            ]
+        );
+    }
 }
