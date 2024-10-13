@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1](https://github.com/ystre/baldr/compare/v0.2.0...v0.2.1) - 2024-10-13
+
+### Other
+
+- Config reading debug log ([#11](https://github.com/ystre/baldr/pull/11))
+- Making CMake configure failure fatal ([#9](https://github.com/ystre/baldr/pull/9))
+
 ## [0.2.0](https://github.com/ystre/baldr/compare/v0.1.0...v0.2.0) - 2024-09-28
 
 ### Features
