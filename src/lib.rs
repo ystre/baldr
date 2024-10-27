@@ -118,15 +118,12 @@ fn read_one_config(var: &str, cfg: ConfigBuilder<DefaultState>) -> ConfigBuilder
 pub fn read_config(config_override: &Option<String>) -> Result<Config, config::ConfigError> {
     let mut config = Config::builder();
 
-    config = match config_override {
-        Some(x) => {
-            config.add_source(config::File::with_name(x.as_str()))
-        },
-        None => {
-            config = read_one_config("XDG_CONFIG_HOME", config);
-            config = read_one_config("HOME", config);
-            config.add_source(config::File::with_name("./.baldr").required(false))
-        }
+    config = if let Some(x) = config_override {
+        config.add_source(config::File::with_name(x.as_str()))
+    } else  {
+        config = read_one_config("XDG_CONFIG_HOME", config);
+        config = read_one_config("HOME", config);
+        config.add_source(config::File::with_name("./.baldr").required(false))
     };
 
     config
