@@ -25,7 +25,7 @@ use log::*;
 /// The path can be overridden via `--config`, in which case it is the only file read, without
 /// merging.
 ///
-/// The name of the file is `baldr.yaml` for example (unless overridden). The extension is
+/// The name of the file is `.baldr.yaml` for example (unless overridden). The extension is
 /// automatically recognized. The followings are supported:
 /// * TOML
 /// * JSON
@@ -93,7 +93,7 @@ fn read_one_config(var: &str, cfg: ConfigBuilder<DefaultState>) -> ConfigBuilder
     if let Ok(x) = env::var(var) {
         log::debug!("Looking for config in {var}.");
 
-        let config_path = Path::new(&x).join("baldr");
+        let config_path = Path::new(&x).join(".baldr");
 
         cfg.add_source(
             config::File::with_name(config_path.to_str().expect("Non UTF-8 string in path")
@@ -125,7 +125,7 @@ pub fn read_config(config_override: &Option<String>) -> Result<Config, config::C
         None => {
             config = read_one_config("XDG_CONFIG_HOME", config);
             config = read_one_config("HOME", config);
-            config.add_source(config::File::with_name("./baldr").required(false))
+            config.add_source(config::File::with_name("./.baldr").required(false))
         }
     };
 
@@ -282,7 +282,7 @@ mod tests {
     fn config() -> Config {
         Config::builder().add_source(
             config::File::with_name(
-                Path::new("baldr")
+                Path::new(".baldr")
                     .to_str()
                     .unwrap()
             )
