@@ -4,7 +4,9 @@ use std::path::{Path,PathBuf};
 use std::process::{ExitStatus, Command};
 
 use config::builder::DefaultState;
-use config::{Config, ConfigBuilder};
+use config::{Config, ConfigBuilder, Map, Value};
+use docker_api::{conn::TtyChunk, Containers, Docker, opts::ContainerCreateOpts, opts::LogsOpts};
+use futures_util::stream::StreamExt;
 use walkdir::WalkDir;
 
 use log::*;
@@ -153,6 +155,82 @@ pub fn get_cmake_definitions(cfg: &Config) -> Vec<String> {
                 .collect(),
         Err(_) => [].to_vec(),
     }
+}
+
+pub fn get_docker_config(cfg: &Config) -> Option<Map<String, Value>> {
+    match cfg.get_table("docker") {
+        Ok(x) => Some(x),
+        Err(_) => None,
+    }
+}
+
+pub fn get_docker_image(cfg: &Config) -> Option<String> {
+    match cfg.get_string("docker.image") {
+        Ok(x) => Some(x),
+        Err(_) => None,
+    }
+}
+
+pub fn get_docker_env(cfg: &Config) -> Vec<String> {
+    match cfg.get_array("docker.env") {
+        Ok(x) =>
+            x.iter()
+                .filter_map(|x| x.clone().into_string().ok())
+                .collect(),
+        Err(_) => [].to_vec(),
+    }
+}
+
+pub async fn create_docker_container(cmd: Vec<&str>, cfg: &Config) -> Result<(), Box<dyn std::error::Error>> {
+    let image: String = get_docker_image(cfg).expect("`docker.image` field is mandatory when using Docker");
+    let env: Vec<String> = get_docker_env(cfg);
+    let docker = Docker::new("unix:///var/run/docker.sock").expect("Something went wrong!");
+
+    // Define the container options
+    let opts = ContainerCreateOpts::builder()
+        .image(image)
+        .env(env)
+        .attach_stdout(true)
+        .attach_stderr(true)
+        .auto_remove(true)
+        .command(cmd)
+        .build();
+
+    // Create the container
+    let container = Containers::new(docker.clone())
+        .create(&opts).await?;
+    let id = container.id().to_string();
+
+    let container = docker.containers().get(&id);
+
+    // Start the container
+    container.start().await?;
+
+    // Fetch logs from the container and display them
+    let mut logs_stream = container.logs(
+        &LogsOpts::builder()
+            .stdout(true)
+            .stderr(true)
+            .follow(true)
+            .build(),
+    );
+
+    while let Some(chunk_result) = logs_stream.next().await {
+        match chunk_result {
+            Ok(chunk) => match chunk {
+                TtyChunk::StdOut(bytes) => {
+                    print!("{}", String::from_utf8_lossy(&bytes));
+                },
+                TtyChunk::StdErr(bytes) => {
+                    eprint!("{}", String::from_utf8_lossy(&bytes));
+                },
+                TtyChunk::StdIn(_) => {},
+            },
+            Err(e) => eprintln!("Error reading logs: {e}"),
+        }
+    }
+
+    Ok(())
 }
 
 /// Invoke CMake's configure command.

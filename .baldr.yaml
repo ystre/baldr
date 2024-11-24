@@ -9,3 +9,10 @@ cmake:
     - CFG1=cfg1
     - CFG2=cfg2
     - invalid: which is silently dropped during parsing, and is tested
+
+docker:
+  image: test-buildenv
+  env:
+    - CICA=cica
+    - KUTYA=kutya
+    - invalid: which is silently dropped during parsing, and is tested
