@@ -5,8 +5,8 @@ use std::process::{ExitStatus, Command};
 
 use config::builder::DefaultState;
 use config::{Config, ConfigBuilder, Map, Value};
-use docker_api::{conn::TtyChunk, Containers, Docker, opts::ContainerCreateOpts, opts::LogsOpts};
-use futures_util::stream::StreamExt;
+use docker_api::{conn::TtyChunk, Containers, Docker, models::ContainerSummary, opts::ContainerCreateOpts, opts::ContainerListOpts, opts::LogsOpts};
+use futures_util::stream::{All, StreamExt};
 use walkdir::WalkDir;
 
 use log::*;
@@ -164,6 +164,13 @@ pub fn get_docker_config(cfg: &Config) -> Option<Map<String, Value>> {
     }
 }
 
+pub fn get_docker_name(cfg: &Config) -> Option<String> {
+    match cfg.get_string("docker.name") {
+        Ok(x) => Some(x),
+        Err(_) => None,
+    }
+}
+
 pub fn get_docker_image(cfg: &Config) -> Option<String> {
     match cfg.get_string("docker.image") {
         Ok(x) => Some(x),
@@ -181,18 +188,69 @@ pub fn get_docker_env(cfg: &Config) -> Vec<String> {
     }
 }
 
+pub fn get_docker_remove(cfg: &Config) -> bool {
+    match cfg.get_bool("docker.remove") {
+        Ok(x) => x,
+        Err(_) => false,
+    }
+}
+
+pub fn get_docker_stdout(cfg: &Config) -> bool {
+    match cfg.get_bool("docker.stdout") {
+        Ok(x) => x,
+        Err(_) => false,
+    }
+}
+
+pub fn get_docker_stderr(cfg: &Config) -> bool {
+    match cfg.get_bool("docker.stderr") {
+        Ok(x) => x,
+        Err(_) => false,
+    }
+}
+
 pub async fn create_docker_container(cmd: Vec<&str>, cfg: &Config) -> Result<(), Box<dyn std::error::Error>> {
-    let image: String = get_docker_image(cfg).expect("`docker.image` field is mandatory when using Docker");
-    let env: Vec<String> = get_docker_env(cfg);
     let docker = Docker::new("unix:///var/run/docker.sock").expect("Something went wrong!");
 
+    let name: Option<String> = get_docker_name(cfg);
+    let image: String = get_docker_image(cfg).expect("`docker.image` field is mandatory when using Docker");
+    let env: Vec<String> = get_docker_env(cfg);
+
+    let list_opts = ContainerListOpts::builder()
+        .all(true)
+        .build();
+
+    if let Some(ref name) = name {
+        let all_containers: Vec<ContainerSummary> = match Containers::new(docker.clone()).list(&list_opts).await {
+            Ok(x) => x,
+            Err(_) => Vec::new(),
+        };
+
+        let filtered: Vec<&ContainerSummary> = all_containers
+            .iter().filter(|x| x.names.as_ref().unwrap().contains(&("/".to_string() + &name))).collect();
+
+        print!("{:?}", filtered);
+
+        if filtered.len() > 0 {
+
+        } else {
+
+        }
+    }
+
     // Define the container options
-    let opts = ContainerCreateOpts::builder()
+    let mut create_opts_builder = ContainerCreateOpts::builder();
+
+    if let Some(name) = name {
+        create_opts_builder = create_opts_builder.name(name);
+    }
+
+    let opts = create_opts_builder
         .image(image)
         .env(env)
-        .attach_stdout(true)
-        .attach_stderr(true)
-        .auto_remove(true)
+        .attach_stdout(get_docker_stdout(cfg))
+        .attach_stderr(get_docker_stderr(cfg))
+        .auto_remove(get_docker_remove(cfg))
         .command(cmd)
         .build();
 

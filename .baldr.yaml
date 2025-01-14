@@ -12,7 +12,11 @@ cmake:
 
 docker:
   image: test-buildenv
+  name: cica
   env:
     - CICA=cica
     - KUTYA=kutya
     - invalid: which is silently dropped during parsing, and is tested
+  remove: true
+  stdout: true
+  stderr: true
