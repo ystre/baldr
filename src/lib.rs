@@ -209,12 +209,10 @@ pub fn get_docker_stderr(cfg: &Config) -> bool {
     }
 }
 
-pub async fn create_docker_container(cmd: Vec<&str>, cfg: &Config) -> Result<(), Box<dyn std::error::Error>> {
+pub async fn docker_container(cmd: Vec<&str>, cfg: &Config) -> Result<(), Box<dyn std::error::Error>> {
     let docker = Docker::new("unix:///var/run/docker.sock").expect("Something went wrong!");
 
     let name: Option<String> = get_docker_name(cfg);
-    let image: String = get_docker_image(cfg).expect("`docker.image` field is mandatory when using Docker");
-    let env: Vec<String> = get_docker_env(cfg);
 
     let list_opts = ContainerListOpts::builder()
         .all(true)
@@ -232,11 +230,22 @@ pub async fn create_docker_container(cmd: Vec<&str>, cfg: &Config) -> Result<(),
         print!("{:?}", filtered);
 
         if filtered.len() > 0 {
-
+            Err("Not yet implemented!".into())
+            // start_or_attach_docker_container();
         } else {
-
+            create_docker_container(&docker, cmd, cfg).await
         }
+    } else {
+        Err("Something went wrong!".into())
     }
+}
+
+pub async fn create_docker_container(docker: &Docker, cmd: Vec<&str>, cfg: &Config)
+        -> Result<(), Box<dyn std::error::Error>>
+{
+    let name: Option<String> = get_docker_name(cfg);
+    let image: String = get_docker_image(cfg).expect("`docker.image` field is mandatory when using Docker");
+    let env: Vec<String> = get_docker_env(cfg);
 
     // Define the container options
     let mut create_opts_builder = ContainerCreateOpts::builder();

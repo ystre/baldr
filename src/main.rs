@@ -7,7 +7,7 @@ use baldr::{
     configure,
     find_files,
     format_cmd,
-    create_docker_container,
+    docker_container,
     read_config,
     read_input,
 };
@@ -184,7 +184,7 @@ async fn entrypoint() -> Result<(), String> {
     let config = read_config(&args.config).map_err(|e| e.to_string())?;
 
     // println!("{:?}", get_docker_env(&config));
-    let _ = create_docker_container(vec!["sh", "-c", "echo $CICA"], &config).await;
+    let _ = docker_container(vec!["sh", "-c", "echo $CICA"], &config).await;
 
     // let build_dir = BuildPath{
         // project: args.project.as_str(),
