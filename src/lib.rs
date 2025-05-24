@@ -34,7 +34,7 @@ use log::*;
 /// * RON
 /// * JSON5
 #[derive(clap::Parser)]
-#[command(verbatim_doc_comment)]
+#[command(version, verbatim_doc_comment)]
 pub struct Args {
     /// Project path to build (containing the root CMakeLists.txt)
     #[arg(short, long)]
