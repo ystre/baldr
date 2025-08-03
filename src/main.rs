@@ -186,7 +186,10 @@ fn run(target: &String, build_dir: &PathBuf, config: &Config, args: &Args) -> Re
 
 fn entrypoint() -> Result<(), String> {
     let args = Args::parse();
-    let config = read_config(&args.config).map_err(|e| e.to_string())?;
+    let config = read_config(
+        &args.config,
+        &args.project
+    ).map_err(|e| e.to_string())?;
 
     let build_dir = BuildPath{
         project: args.project.as_str(),

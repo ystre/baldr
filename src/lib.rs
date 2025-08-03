@@ -17,7 +17,7 @@ use log::*;
 /// priority):
 /// * XDG_CONFIG_HOME
 /// * HOME
-/// * Current working directory
+/// * Project directory
 ///
 /// If multiple files found, they are merged. In case of keys defined in multiple places, the
 /// highest priority will be kept.
@@ -110,20 +110,31 @@ fn read_one_config(var: &str, cfg: ConfigBuilder<DefaultState>) -> ConfigBuilder
 /// Files are looked in the following directories:
 /// * XDG_CONFIG_HOME
 /// * HOME
-/// * Current working directory
+/// * Project directory
 ///
 /// # Errors
 ///
 /// Returns an error if config files exist but cannot be read or the configuration is invalid.
-pub fn read_config(config_override: &Option<String>) -> Result<Config, config::ConfigError> {
+///
+/// # Panics
+///
+/// Panics if the project path is not a valid UTF-8 string.
+pub fn read_config(config_override: &Option<String>, project: &String) -> Result<Config, config::ConfigError> {
     let mut config = Config::builder();
 
     config = if let Some(x) = config_override {
         config.add_source(config::File::with_name(x.as_str()))
-    } else  {
+    } else {
         config = read_one_config("XDG_CONFIG_HOME", config);
         config = read_one_config("HOME", config);
-        config.add_source(config::File::with_name("./.baldr").required(false))
+        config.add_source(
+            config::File::with_name(
+                Path::new(project).join(".baldr")
+                    .to_str()
+                    .expect("Non UTF-8 string in path")
+            )
+            .required(false)
+        )
     };
 
     config
