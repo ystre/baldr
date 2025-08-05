@@ -4,7 +4,9 @@ use std::path::{Path,PathBuf};
 use std::process::{ExitStatus, Command};
 
 use config::builder::DefaultState;
-use config::{Config, ConfigBuilder};
+use config::{Config, ConfigBuilder, Map, Value};
+use docker_api::{conn::TtyChunk, Containers, Docker, models::ContainerSummary, opts::ContainerCreateOpts, opts::ContainerListOpts, opts::LogsOpts};
+use futures_util::stream::{All, StreamExt};
 use walkdir::WalkDir;
 
 use log::*;
@@ -158,6 +160,149 @@ pub fn get_cmake_definitions(cfg: &Config) -> Vec<String> {
                 .collect(),
         Err(_) => [].to_vec(),
     }
+}
+
+pub fn get_docker_config(cfg: &Config) -> Option<Map<String, Value>> {
+    match cfg.get_table("docker") {
+        Ok(x) => Some(x),
+        Err(_) => None,
+    }
+}
+
+pub fn get_docker_name(cfg: &Config) -> Option<String> {
+    match cfg.get_string("docker.name") {
+        Ok(x) => Some(x),
+        Err(_) => None,
+    }
+}
+
+pub fn get_docker_image(cfg: &Config) -> Option<String> {
+    match cfg.get_string("docker.image") {
+        Ok(x) => Some(x),
+        Err(_) => None,
+    }
+}
+
+pub fn get_docker_env(cfg: &Config) -> Vec<String> {
+    match cfg.get_array("docker.env") {
+        Ok(x) =>
+            x.iter()
+                .filter_map(|x| x.clone().into_string().ok())
+                .collect(),
+        Err(_) => [].to_vec(),
+    }
+}
+
+pub fn get_docker_remove(cfg: &Config) -> bool {
+    match cfg.get_bool("docker.remove") {
+        Ok(x) => x,
+        Err(_) => false,
+    }
+}
+
+pub fn get_docker_stdout(cfg: &Config) -> bool {
+    match cfg.get_bool("docker.stdout") {
+        Ok(x) => x,
+        Err(_) => false,
+    }
+}
+
+pub fn get_docker_stderr(cfg: &Config) -> bool {
+    match cfg.get_bool("docker.stderr") {
+        Ok(x) => x,
+        Err(_) => false,
+    }
+}
+
+pub async fn docker_container(cmd: Vec<&str>, cfg: &Config) -> Result<(), Box<dyn std::error::Error>> {
+    let docker = Docker::new("unix:///var/run/docker.sock").expect("Something went wrong!");
+
+    let name: Option<String> = get_docker_name(cfg);
+
+    let list_opts = ContainerListOpts::builder()
+        .all(true)
+        .build();
+
+    if let Some(ref name) = name {
+        let all_containers: Vec<ContainerSummary> = match Containers::new(docker.clone()).list(&list_opts).await {
+            Ok(x) => x,
+            Err(_) => Vec::new(),
+        };
+
+        let filtered: Vec<&ContainerSummary> = all_containers
+            .iter().filter(|x| x.names.as_ref().unwrap().contains(&("/".to_string() + &name))).collect();
+
+        print!("{:?}", filtered);
+
+        if filtered.len() > 0 {
+            Err("Not yet implemented!".into())
+            // start_or_attach_docker_container();
+        } else {
+            create_docker_container(&docker, cmd, cfg).await
+        }
+    } else {
+        Err("Something went wrong!".into())
+    }
+}
+
+pub async fn create_docker_container(docker: &Docker, cmd: Vec<&str>, cfg: &Config)
+        -> Result<(), Box<dyn std::error::Error>>
+{
+    let name: Option<String> = get_docker_name(cfg);
+    let image: String = get_docker_image(cfg).expect("`docker.image` field is mandatory when using Docker");
+    let env: Vec<String> = get_docker_env(cfg);
+
+    // Define the container options
+    let mut create_opts_builder = ContainerCreateOpts::builder();
+
+    if let Some(name) = name {
+        create_opts_builder = create_opts_builder.name(name);
+    }
+
+    let opts = create_opts_builder
+        .image(image)
+        .env(env)
+        .attach_stdout(get_docker_stdout(cfg))
+        .attach_stderr(get_docker_stderr(cfg))
+        .auto_remove(get_docker_remove(cfg))
+        .command(cmd)
+        .build();
+
+    // Create the container
+    let container = Containers::new(docker.clone())
+        .create(&opts).await?;
+    let id = container.id().to_string();
+
+    let container = docker.containers().get(&id);
+
+    // Start the container
+    container.start().await?;
+
+    // Fetch logs from the container and display them
+    let mut logs_stream = container.logs(
+        &LogsOpts::builder()
+            .stdout(true)
+            .stderr(true)
+            .follow(true)
+            .build(),
+    );
+
+    while let Some(chunk_result) = logs_stream.next().await {
+        match chunk_result {
+            Ok(chunk) => match chunk {
+                TtyChunk::StdOut(bytes) => {
+                    print!("{}", String::from_utf8_lossy(&bytes));
+                },
+                TtyChunk::StdErr(bytes) => {
+                    eprint!("{}", String::from_utf8_lossy(&bytes));
+                },
+                TtyChunk::StdIn(_) => {},
+            },
+            Err(e) => eprintln!("Error reading logs: {e}"),
+        }
+    }
+
+    Ok(())
 }
 
 /// Invoke CMake's configure command.

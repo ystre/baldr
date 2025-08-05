@@ -7,6 +7,7 @@ use baldr::{
     configure,
     find_files,
     format_cmd,
+    docker_container,
     read_config,
     read_input,
 };
@@ -184,71 +185,76 @@ fn run(target: &String, build_dir: &PathBuf, config: &Config, args: &Args) -> Re
     }
 }
 
-fn entrypoint() -> Result<(), String> {
+async fn entrypoint() -> Result<(), String> {
     let args = Args::parse();
     let config = read_config(
         &args.config,
         &args.project
     ).map_err(|e| e.to_string())?;
 
-    let build_dir = BuildPath{
-        project: args.project.as_str(),
-        build_type: args.build_type.as_str(),
-        compiler_path: &config.get_string("compiler.cxx").unwrap_or_default(),
-        sanitizer: None,
-        custom_dir: args.build_dir.as_deref()
-    }.to_path();
+    // println!("{:?}", get_docker_env(&config));
 
-    info!("Using build directory: {}", build_dir.to_string_lossy());
+    let _ = docker_container(vec!["sh", "-c", "echo $CICA"], &config).await;
 
-    let mut build_exists = match fs::exists(&build_dir) {
-        Ok(true) => {
-            info!("Build directory already exists.");
-            Ok(true)
-        },
-        Ok(false) => Ok(false),
-        Err(x) => Err(format!("{x}")),
-    }?;
+    // let build_dir = BuildPath{
+        // project: args.project.as_str(),
+        // build_type: args.build_type.as_str(),
+        // compiler_path: &config.get_string("compiler.cxx").unwrap_or_default(),
+        // sanitizer: None,
+        // custom_dir: args.build_dir.as_deref()
+    // }.to_path();
 
-    if args.delete {
-        if build_exists {
-            build_exists = !delete_build_dir(&build_dir, !args.no_confirm)?;
-        } else {
-            warn!("Build directory does not exist, there is nothing to delete!");
-        }
+    // info!("Using build directory: {}", build_dir.to_string_lossy());
 
-        if !build_exists {
-            fs::create_dir_all(&build_dir).map_err(|e| format!("Failed to create build directory: {e}"))?;
-            info!("Build directory has been created.");
-        }
-    }
+    // let mut build_exists = match fs::exists(&build_dir) {
+        // Ok(true) => {
+            // info!("Build directory already exists.");
+            // Ok(true)
+        // },
+        // Ok(false) => Ok(false),
+        // Err(x) => Err(format!("{x}")),
+    // }?;
 
-    if (!build_exists || !args.no_configure) &&
-        !configure(build_dir.as_path(), &args, &config)?.success() {
-            return Err("Configuring failed".into());
-    }
+    // if args.delete {
+        // if build_exists {
+            // build_exists = !delete_build_dir(&build_dir, !args.no_confirm)?;
+        // } else {
+            // warn!("Build directory does not exist, there is nothing to delete!");
+        // }
 
-    if !build(build_dir.as_path(), &args)?.success() {
-        return Err("Build failed".into());
-    }
+        // if !build_exists {
+            // fs::create_dir_all(&build_dir).map_err(|e| format!("Failed to create build directory: {e}"))?;
+            // info!("Build directory has been created.");
+        // }
+    // }
 
-    create_compile_cmd_symlink(build_dir.as_path(), Path::new(&args.project))
-        .map_err(|e| format!("Failed to create a symlink for `compile_commands.json`: {e}"))?;
+    // if (!build_exists || !args.no_configure) &&
+        // !configure(build_dir.as_path(), &args, &config)?.success() {
+            // return Err("Configuring failed".into());
+    // }
 
-    if args.run {
-        run(&args.target, &build_dir, &config, &args)?;
-        info!("Built exectuable has been successfully run.");
-    }
+    // if !build(build_dir.as_path(), &args)?.success() {
+        // return Err("Build failed".into());
+    // }
+
+    // create_compile_cmd_symlink(build_dir.as_path(), Path::new(&args.project))
+        // .map_err(|e| format!("Failed to create a symlink for `compile_commands.json`: {e}"))?;
+
+    // if args.run {
+        // run(&args.target, &build_dir, &config, &args)?;
+        // info!("Built exectuable has been successfully run.");
+    // }
 
     Ok(())
 }
 
-fn main() {
+#[tokio::main]
+async fn main() {
     env_logger::builder()
         .format_timestamp_millis()
         .init();
 
-    match entrypoint() {
+    match entrypoint().await {
         Ok(()) => {},
         Err(e) => {
             log::error!("Fatal error encountered: {e}");
