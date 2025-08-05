@@ -37,7 +37,8 @@ struct BuildPath<'a> {
     project: &'a str,
     build_type: &'a str,
     compiler_path: &'a str,
-    sanitizer: Option<&'a str>
+    sanitizer: Option<&'a str>,
+    custom_dir: Option<&'a str>
 }
 
 impl<'a> BuildPath<'a> {
@@ -55,15 +56,20 @@ impl<'a> BuildPath<'a> {
             _  => format!("-{}", Path::new(&self.compiler_path).file_name().expect("Invalid compiler path").to_string_lossy()),
         };
 
-        let dir = format!(
-            "{}{}{}",
-            self.build_type.to_lowercase(),
-            compiler,
-            match self.sanitizer {
-                Some(san) => format!("-{san}"),
-                None => String::new()
+        let dir = match self.custom_dir {
+            Some(dir) => dir.into(),
+            None => {
+                format!(
+                    "{}{}{}",
+                    self.build_type.to_lowercase(),
+                    compiler,
+                    match self.sanitizer {
+                        Some(san) => format!("-{san}"),
+                        None => String::new()
+                    }
+                )
             }
-        );
+        };
 
         PathBuf::from(self.project)
             .join("build")
@@ -181,16 +187,21 @@ fn run(target: &String, build_dir: &PathBuf, config: &Config, args: &Args) -> Re
 
 async fn entrypoint() -> Result<(), String> {
     let args = Args::parse();
-    let config = read_config(&args.config).map_err(|e| e.to_string())?;
+    let config = read_config(
+        &args.config,
+        &args.project
+    ).map_err(|e| e.to_string())?;
 
     // println!("{:?}", get_docker_env(&config));
+
     let _ = docker_container(vec!["sh", "-c", "echo $CICA"], &config).await;
 
     // let build_dir = BuildPath{
         // project: args.project.as_str(),
         // build_type: args.build_type.as_str(),
         // compiler_path: &config.get_string("compiler.cxx").unwrap_or_default(),
-        // sanitizer: None
+        // sanitizer: None,
+        // custom_dir: args.build_dir.as_deref()
     // }.to_path();
 
     // info!("Using build directory: {}", build_dir.to_string_lossy());
@@ -263,9 +274,24 @@ mod tests {
                 project: "project".into(),
                 build_type: "Debug".into(),
                 compiler_path: "".into(),
-                sanitizer: None
+                sanitizer: None,
+                custom_dir: None
             }.to_path().to_string_lossy(),
             "project/build/debug"
+        );
+    }
+
+    #[test]
+    fn build_dir_custom() {
+        assert_eq!(
+            BuildPath{
+                project: "project".into(),
+                build_type: "Debug".into(),
+                compiler_path: "".into(),
+                sanitizer: None,
+                custom_dir: "custom".into()
+            }.to_path().to_string_lossy(),
+            "project/build/custom"
         );
     }
 
@@ -276,7 +302,8 @@ mod tests {
                 project: "project".into(),
                 build_type: "Debug".into(),
                 compiler_path: "".into(),
-                sanitizer: Some("asan")
+                sanitizer: Some("asan"),
+                custom_dir: None
             }.to_path().to_string_lossy(),
             "project/build/debug-asan"
         );
@@ -289,7 +316,8 @@ mod tests {
                 project: "project".into(),
                 build_type: "Debug".into(),
                 compiler_path: "gcc".into(),
-                sanitizer: None
+                sanitizer: None,
+                custom_dir: None
             }.to_path().to_string_lossy(),
             "project/build/debug-gcc"
         );
@@ -302,7 +330,8 @@ mod tests {
                 project: "project".into(),
                 build_type: "Debug".into(),
                 compiler_path: "gcc".into(),
-                sanitizer: Some("asan")
+                sanitizer: Some("asan"),
+                custom_dir: None
             }.to_path().to_string_lossy(),
             "project/build/debug-gcc-asan"
         );

@@ -19,7 +19,7 @@ use log::*;
 /// priority):
 /// * XDG_CONFIG_HOME
 /// * HOME
-/// * Current working directory
+/// * Project directory
 ///
 /// If multiple files found, they are merged. In case of keys defined in multiple places, the
 /// highest priority will be kept.
@@ -36,7 +36,7 @@ use log::*;
 /// * RON
 /// * JSON5
 #[derive(clap::Parser)]
-#[command(verbatim_doc_comment)]
+#[command(version, verbatim_doc_comment)]
 pub struct Args {
     /// Project path to build (containing the root CMakeLists.txt)
     #[arg(short, long)]
@@ -112,20 +112,31 @@ fn read_one_config(var: &str, cfg: ConfigBuilder<DefaultState>) -> ConfigBuilder
 /// Files are looked in the following directories:
 /// * XDG_CONFIG_HOME
 /// * HOME
-/// * Current working directory
+/// * Project directory
 ///
 /// # Errors
 ///
 /// Returns an error if config files exist but cannot be read or the configuration is invalid.
-pub fn read_config(config_override: &Option<String>) -> Result<Config, config::ConfigError> {
+///
+/// # Panics
+///
+/// Panics if the project path is not a valid UTF-8 string.
+pub fn read_config(config_override: &Option<String>, project: &String) -> Result<Config, config::ConfigError> {
     let mut config = Config::builder();
 
     config = if let Some(x) = config_override {
         config.add_source(config::File::with_name(x.as_str()))
-    } else  {
+    } else {
         config = read_one_config("XDG_CONFIG_HOME", config);
         config = read_one_config("HOME", config);
-        config.add_source(config::File::with_name("./.baldr").required(false))
+        config.add_source(
+            config::File::with_name(
+                Path::new(project).join(".baldr")
+                    .to_str()
+                    .expect("Non UTF-8 string in path")
+            )
+            .required(false)
+        )
     };
 
     config
@@ -133,18 +144,12 @@ pub fn read_config(config_override: &Option<String>) -> Result<Config, config::C
         .build()
 }
 
-pub fn get_cc(cfg: &Config) -> Option<String> {
-    match cfg.get_string("compiler.cc") {
-        Ok(x) => Some(x),
-        Err(_) => None,
-    }
+pub fn get_cc(cfg: &Config) -> String {
+    cfg.get_string("compiler.cc").unwrap_or_default()
 }
 
-pub fn get_cxx(cfg: &Config) -> Option<String> {
-    match cfg.get_string("compiler.cxx") {
-        Ok(x) => Some(x),
-        Err(_) => None,
-    }
+pub fn get_cxx(cfg: &Config) -> String {
+    cfg.get_string("compiler.cxx").unwrap_or_default()
 }
 
 pub fn get_cmake_definitions(cfg: &Config) -> Vec<String> {
@@ -308,8 +313,8 @@ pub async fn create_docker_container(docker: &Docker, cmd: Vec<&str>, cfg: &Conf
 pub fn configure(path: &Path, args: &Args, config: &Config) -> Result<ExitStatus, String> {
     let mut cmd = Command::new("cmake");
 
-    let cc: String = get_cc(config).unwrap_or_default();
-    let cxx: String = get_cxx(config).unwrap_or_default();
+    let cc: String = get_cc(config);
+    let cxx: String = get_cxx(config);
     if !cc.is_empty() && !cxx.is_empty() {
         cmd.env("CC", cc);
         cmd.env("CXX", cxx);
@@ -331,7 +336,7 @@ pub fn configure(path: &Path, args: &Args, config: &Config) -> Result<ExitStatus
     }
 
     let cmd_str = format_cmd(&cmd);
-    debug!("CMD: {}", cmd_str);
+    debug!("CMD: {cmd_str}");
     let mut process = cmd.spawn().map_err(|e| format!("Spawning command `{cmd_str}` failed with `{e}`"))?;
     process.wait().map_err(|e| format!("Command `{cmd_str}` did not start; {e}"))
 }
@@ -351,7 +356,7 @@ pub fn build(path: &Path, args: &Args) -> Result<ExitStatus, String> {
     ]);
 
     let cmd_str = format_cmd(&cmd);
-    debug!("CMD: {}", cmd_str);
+    debug!("CMD: {cmd_str}");
     let mut process = cmd.spawn().map_err(|e| format!("Spawning command `{cmd_str}` failed with `{e}`"))?;
     process.wait().map_err(|e| format!("Command `{cmd_str}` did not start; {e}"))
 }
@@ -433,12 +438,12 @@ mod tests {
 
     #[test]
     fn cfg_cc() {
-        assert_eq!(get_cc(&config()), Some("gcc".into()));
+        assert_eq!(get_cc(&config()), "gcc");
     }
 
     #[test]
     fn cfg_cxx() {
-        assert_eq!(get_cxx(&config()), Some("g++".into()));
+        assert_eq!(get_cxx(&config()), "g++");
     }
 
     #[test]
